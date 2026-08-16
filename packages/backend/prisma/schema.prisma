@@ -1,0 +1,643 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  SUPER_ADMIN
+  RESTAURANT_ADMIN
+  SUPERVISOR
+  CASHIER
+}
+
+enum SubscriptionStatus {
+  TRIAL
+  ACTIVE
+  EXPIRED
+  SUSPENDED
+  CANCELLED
+}
+
+enum OrderType {
+  TAKEAWAY
+  DELIVERY
+  RESERVATION
+  OWNER
+  EMPLOYEES
+  CUSTOMER_SATISFACTION
+}
+
+enum OrderStatus {
+  PENDING
+  IN_KITCHEN
+  ON_THE_WAY
+  COMPLETED
+  CANCELLED
+  REJECTED
+}
+
+enum OrderSource {
+  CASHIER
+  WEBSITE
+  MOBILE_APP
+}
+
+enum PaymentMethod {
+  CASH
+  WALLET
+  VISA
+}
+
+enum DiscountType {
+  FIXED
+  PERCENTAGE
+}
+
+enum WhatsAppStatus {
+  PENDING
+  SENT
+  FAILED
+}
+
+enum StockMovementType {
+  STOCK_IN
+  STOCK_OUT
+  ADJUSTMENT
+  INVENTORY_COUNT
+  RETURN
+}
+
+enum AuditAction {
+  LOGIN
+  LOGOUT
+  LOGIN_FAILED
+  CREATE_ORDER
+  EDIT_ORDER
+  CANCEL_ORDER
+  PRINT_ORDER
+  SEND_INVOICE
+  ASSIGN_DRIVER
+  REMOVE_DRIVER
+  SETTLEMENT
+  CREATE_CUSTOMER
+  EDIT_CUSTOMER
+  PRODUCT_CHANGE
+  PRICE_CHANGE
+  INVENTORY_MOVEMENT
+  EXPENSE_CREATE
+  EXPENSE_EDIT
+  EXPENSE_DELETE
+  USER_CHANGE
+  PERMISSION_CHANGE
+  CASHIER_OPEN
+  CASHIER_CLOSE
+  APP_ORDER_ACCEPT
+  APP_ORDER_REJECT
+}
+
+enum SessionStatus {
+  OPEN
+  CLOSED
+}
+
+model SubscriptionPlan {
+  id           String         @id @default(uuid())
+  name         String         @unique
+  maxBranches  Int            @default(1)
+  maxUsers     Int            @default(5)
+  priceMonthly Float          @default(0)
+  features     Json           @default("{}")
+  isActive     Boolean        @default(true)
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+restaurants Restaurant[]
+  @@map("subscription_plans")
+}
+
+model Restaurant {
+  id                  String             @id @default(uuid())
+  code                String             @unique
+  name                String
+  logoUrl             String?
+  phone               String?
+  address             String?
+  governorate         String?
+  settings            Json               @default("{}")
+  isActive            Boolean            @default(true)
+  subscriptionStatus  SubscriptionStatus @default(TRIAL)
+  subscriptionStart   DateTime?
+  subscriptionEnd     DateTime?
+  planId              String?
+  plan                SubscriptionPlan?  @relation(fields: [planId], references: [id], onDelete: SetNull)
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+  branches            Branch[]
+  users               User[]
+  customers           Customer[]
+  owners              Owner[]
+  categories          Category[]
+  products            Product[]
+  orders              Order[]
+  drivers             Driver[]
+  inventoryItems      InventoryItem[]
+  stockMovements      StockMovement[]
+  purchases           Purchase[]
+  expenses            Expense[]
+  cashierSessions     CashierSession[]
+  auditLogs           AuditLog[]
+  appOrders           AppOrder[]
+  whatsappLogs        WhatsAppLog[]
+  @@index([isActive])
+  @@index([subscriptionStatus])
+  @@map("restaurants")
+}
+
+model Branch {
+  id           String     @id @default(uuid())
+  restaurantId String
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  name         String
+  address      String?
+  phone        String?
+  isActive     Boolean    @default(true)
+  settings     Json       @default("{}")
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  users             User[]
+  orders            Order[]
+  dailyCounters     DailyOrderCounter[]
+  drivers           Driver[]
+  driverAssignments DriverAssignment[]
+  inventoryItems    InventoryItem[]
+  stockMovements    StockMovement[]
+  purchases         Purchase[]
+  expenses          Expense[]
+  cashierSessions   CashierSession[]
+  appOrders         AppOrder[]
+owners Owner[]
+  @@unique([restaurantId, name])
+  @@index([restaurantId, isActive])
+  @@map("branches")
+}
+
+model DailyOrderCounter {
+  id         String   @id @default(uuid())
+  branchId   String
+  branch     Branch   @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  orderDate  DateTime @db.Date
+  lastNumber Int      @default(0)
+  updatedAt  DateTime @updatedAt
+  @@unique([branchId, orderDate])
+  @@map("daily_order_counters")
+}
+
+model User {
+  id               String      @id @default(uuid())
+  restaurantId     String?
+  restaurant       Restaurant? @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  branchId         String?
+  branch           Branch?     @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  username         String      @unique
+  passwordHash     String
+  fullName         String
+  phone            String?
+  role             Role        @default(CASHIER)
+  permissions      Json        @default("[]")
+  allowedBranchIds Json        @default("[]")
+  isActive         Boolean     @default(true)
+  isSuperAdmin     Boolean     @default(false)
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+  lastLoginAt      DateTime?
+  orders            Order[]
+  driverAssignments DriverAssignment[]
+  expenses          Expense[]
+  cashierSessions   CashierSession[]
+  auditLogs         AuditLog[]
+  settlements       DriverSettlement[]
+  @@index([restaurantId, role])
+  @@index([restaurantId, isActive])
+  @@map("users")
+}
+
+model Customer {
+  id           String     @id @default(uuid())
+  restaurantId String
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  phone        String
+  name         String?
+  address      String?
+  area         String?
+  governorate  String?
+  notes        String?
+  totalOrders  Int        @default(0)
+  totalSpent   Float      @default(0)
+  lastOrderAt  DateTime?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  orders       Order[]
+  @@unique([restaurantId, phone])
+  @@index([restaurantId, phone])
+  @@map("customers")
+}
+
+model Owner {
+  id           String     @id @default(uuid())
+  restaurantId String
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  branchId     String?
+  branch       Branch?    @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  name         String
+  phone        String?
+  address      String?
+  notes        String?
+  isActive     Boolean    @default(true)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  orders       Order[]
+  @@index([restaurantId, isActive])
+  @@map("owners")
+}
+
+model Category {
+  id           String     @id @default(uuid())
+  restaurantId String
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  name         String
+  imageUrl     String?
+  displayOrder Int        @default(0)
+  isActive     Boolean    @default(true)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  products     Product[]
+  @@index([restaurantId, isActive, displayOrder])
+  @@map("categories")
+}
+
+model Product {
+  id           String     @id @default(uuid())
+  restaurantId String
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  categoryId   String
+  category     Category   @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  name         String
+  description  String?
+  imageUrl     String?
+  basePrice    Float
+  displayOrder Int        @default(0)
+  isActive     Boolean    @default(true)
+  sizes        Json       @default("[]")
+  variants     Json       @default("[]")
+  extras       Json       @default("[]")
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  orderItems   OrderItem[]
+  recipeItems  RecipeItem[]
+  @@index([restaurantId, categoryId, isActive])
+  @@map("products")
+}
+
+model Order {
+  id              String        @id @default(uuid())
+  restaurantId    String
+  restaurant      Restaurant    @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  branchId        String
+  branch          Branch        @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  dailyNumber     Int
+  orderDate       DateTime      @db.Date
+  orderType       OrderType
+  status          OrderStatus   @default(IN_KITCHEN)
+  source          OrderSource   @default(CASHIER)
+  customerPhone   String?
+  customerName    String?
+  customerAddress String?
+  customerId      String?
+  customer        Customer?     @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  ownerId         String?
+  owner           Owner?        @relation(fields: [ownerId], references: [id], onDelete: SetNull)
+  ownerSnapshot   Json?
+  subtotal        Float         @default(0)
+  discountAmount  Float         @default(0)
+  discountType    DiscountType?
+  deliveryFee     Float         @default(0)
+  netAmount       Float         @default(0)
+  totalAmount     Float         @default(0)
+  restaurantDue   Float         @default(0)
+  driverDue       Float         @default(0)
+  paymentMethod   PaymentMethod @default(CASH)
+  sessionId       String?
+  session         CashierSession? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+  appOrderId      String?         @unique
+  appOrder        AppOrder?     @relation(fields: [appOrderId], references: [id], onDelete: SetNull)
+  notes           String?
+  createdBy       String
+  creator         User          @relation(fields: [createdBy], references: [id], onDelete: Restrict)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  completedAt     DateTime?
+  cancelledAt     DateTime?
+  cancelReason    String?
+  items            OrderItem[]
+  driverAssignment DriverAssignment?
+  whatsappLogs     WhatsAppLog[]
+  @@unique([branchId, orderDate, dailyNumber])
+  @@index([restaurantId, createdAt])
+  @@index([restaurantId, status])
+  @@index([restaurantId, orderType])
+  @@index([branchId, orderDate])
+  @@index([customerPhone])
+  @@map("orders")
+}
+
+model OrderItem {
+  id           String   @id @default(uuid())
+  orderId      String
+  order        Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId    String?
+  product      Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+  productName  String
+  productPrice Float
+  sizeName     String?
+  sizePrice    Float    @default(0)
+  quantity     Int      @default(1)
+  unitPrice    Float
+  lineTotal    Float
+  extras       Json     @default("[]")
+  notes        String?
+  @@index([orderId])
+  @@map("order_items")
+}
+
+model Driver {
+  id           String     @id @default(uuid())
+  restaurantId String
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  branchId     String?
+  branch       Branch?    @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  name         String
+  phone        String?
+  notes        String?
+  isActive     Boolean    @default(true)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  assignments  DriverAssignment[]
+  settlements  DriverSettlement[]
+  @@index([restaurantId, isActive])
+  @@index([branchId, isActive])
+  @@map("drivers")
+}
+
+model DriverAssignment {
+  id         String   @id @default(uuid())
+  orderId    String   @unique
+  order      Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  driverId   String
+  driver     Driver   @relation(fields: [driverId], references: [id], onDelete: Restrict)
+  branchId   String
+  branch     Branch   @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  assignedBy String
+  assigner   User     @relation(fields: [assignedBy], references: [id], onDelete: Restrict)
+  assignedAt DateTime @default(now())
+  removedAt  DateTime?
+  removedBy  String?
+  isActive   Boolean  @default(true)
+  @@index([driverId, isActive])
+  @@map("driver_assignments")
+}
+
+model DriverSettlement {
+  id           String   @id @default(uuid())
+  restaurantId String
+  driverId     String
+  driver       Driver   @relation(fields: [driverId], references: [id], onDelete: Restrict)
+  branchId     String?
+  totalDue     Float    @default(0)
+  paidAmount   Float    @default(0)
+  remaining    Float    @default(0)
+  settledBy    String
+  settler      User     @relation(fields: [settledBy], references: [id], onDelete: Restrict)
+  notes        String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  items        SettlementItem[]
+  @@index([driverId, createdAt])
+  @@map("driver_settlements")
+}
+
+model SettlementItem {
+  id           String           @id @default(uuid())
+  settlementId String
+  settlement   DriverSettlement @relation(fields: [settlementId], references: [id], onDelete: Cascade)
+  orderId      String           @unique
+  deliveryFee  Float
+  @@map("settlement_items")
+}
+
+model CashierSession {
+  id            String        @id @default(uuid())
+  restaurantId  String
+  restaurant    Restaurant    @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  branchId      String
+  branch        Branch        @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  cashierId     String
+  cashier       User          @relation(fields: [cashierId], references: [id], onDelete: Restrict)
+  openingAmount Float         @default(0)
+  cashSales     Float         @default(0)
+  walletSales   Float         @default(0)
+  visaSales     Float         @default(0)
+  cashExpenses  Float         @default(0)
+  expectedCash  Float         @default(0)
+  closingAmount Float?
+  difference    Float?
+  status        SessionStatus @default(OPEN)
+  startedAt     DateTime      @default(now())
+  closedAt      DateTime?
+  closedBy      String?
+  orders   Order[]
+  expenses Expense[]
+  @@index([restaurantId, status])
+  @@index([cashierId, status])
+  @@index([branchId, startedAt])
+  @@map("cashier_sessions")
+}
+
+model Expense {
+  id           String     @id @default(uuid())
+  restaurantId String
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  branchId     String
+  branch       Branch     @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  description  String
+  amount       Float
+  notes        String?
+  sessionId    String?
+  session      CashierSession? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+  createdBy    String
+  creator      User       @relation(fields: [createdBy], references: [id], onDelete: Restrict)
+  updatedBy    String?
+  isDeleted    Boolean    @default(false)
+  deletedAt    DateTime?
+  deletedBy    String?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  @@index([restaurantId, createdAt])
+  @@index([branchId, createdAt])
+  @@index([sessionId])
+  @@index([isDeleted])
+  @@map("expenses")
+}
+
+model InventoryItem {
+  id           String     @id @default(uuid())
+  restaurantId String
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  branchId     String?
+  branch       Branch?    @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  name         String
+  unit         String
+  currentQty   Float      @default(0)
+  minQty       Float      @default(0)
+  costPerUnit  Float      @default(0)
+  supplier     String?
+  isActive     Boolean    @default(true)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  movements    StockMovement[]
+  recipeItems  RecipeItem[]
+  @@unique([restaurantId, branchId, name])
+  @@index([restaurantId, isActive])
+  @@map("inventory_items")
+}
+
+model StockMovement {
+  id           String           @id @default(uuid())
+  restaurantId String
+  restaurant   Restaurant       @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  branchId     String?
+  branch       Branch?          @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  itemId       String
+  item         InventoryItem    @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  type         StockMovementType
+  quantity     Float
+  reason       String?
+  userId       String
+  purchaseId   String?
+  purchase     Purchase?        @relation(fields: [purchaseId], references: [id], onDelete: SetNull)
+  createdAt    DateTime         @default(now())
+  @@index([itemId, createdAt])
+  @@index([restaurantId, createdAt])
+  @@map("stock_movements")
+}
+
+model Purchase {
+  id           String     @id @default(uuid())
+  restaurantId String
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  branchId     String?
+  branch       Branch?    @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  supplier     String
+  invoiceNo    String?
+  totalCost    Float      @default(0)
+  notes        String?
+  createdAt    DateTime   @default(now())
+  items     PurchaseItem[]
+  movements StockMovement[]
+  @@index([restaurantId, createdAt])
+  @@map("purchases")
+}
+
+model PurchaseItem {
+  id         String   @id @default(uuid())
+  purchaseId String
+  purchase   Purchase @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+  itemId     String
+  quantity   Float
+  cost       Float
+  @@map("purchase_items")
+}
+
+model RecipeItem {
+  id        String        @id @default(uuid())
+  productId String
+  product   Product       @relation(fields: [productId], references: [id], onDelete: Cascade)
+  itemId    String
+  item      InventoryItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  quantity  Float
+  @@unique([productId, itemId])
+  @@map("recipe_items")
+}
+
+model AppOrder {
+  id              String        @id @default(uuid())
+  restaurantId    String
+  restaurant      Restaurant    @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  branchId        String?
+  branch          Branch?       @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  externalId      String        @unique
+  customerPhone   String
+  customerName    String?
+  customerAddress String?
+  orderType       OrderType     @default(DELIVERY)
+  paymentMethod   PaymentMethod @default(CASH)
+  items           Json
+  subtotal        Float         @default(0)
+  deliveryFee     Float         @default(0)
+  totalAmount     Float         @default(0)
+  notes           String?
+  status          OrderStatus   @default(PENDING)
+  rejectReason    String?
+  acceptedBy      String?
+  acceptedAt      DateTime?
+  rejectedBy      String?
+  rejectedAt      DateTime?
+  orderId         String?         @unique
+  order           Order?        
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  @@index([restaurantId, status])
+  @@index([status, createdAt])
+  @@map("app_orders")
+}
+
+model WhatsAppLog {
+  id            String         @id @default(uuid())
+  orderId       String?
+  order         Order?         @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  restaurantId  String
+  restaurant    Restaurant     @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  phoneNumber   String
+  messageBody   String
+  status        WhatsAppStatus @default(PENDING)
+  providerMsgId String?
+  errorMessage  String?
+  sentAt        DateTime?
+  createdAt     DateTime       @default(now())
+  @@index([orderId])
+  @@index([restaurantId, createdAt])
+  @@map("whatsapp_logs")
+}
+
+model AuditLog {
+  id           String      @id @default(uuid())
+  restaurantId String?
+  restaurant   Restaurant? @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  branchId     String?
+  userId       String?
+  user         User?       @relation(fields: [userId], references: [id], onDelete: SetNull)
+  action       AuditAction
+  entityType   String?
+  entityId     String?
+  oldData      Json?
+  newData      Json?
+  ipAddress    String?
+  userAgent    String?
+  createdAt    DateTime    @default(now())
+  @@index([restaurantId, createdAt])
+  @@index([userId, createdAt])
+  @@index([action, createdAt])
+  @@map("audit_logs")
+}

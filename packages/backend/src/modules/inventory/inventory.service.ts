@@ -58,7 +58,7 @@ export class InventoryService {
     const where: any = { restaurantId };
     if (itemId) where.itemId = itemId;
     const [data, total] = await Promise.all([
-      this.prisma.stockMovement.findMany({ where, skip: (page - 1) * limit, take: limit, orderBy: { createdAt: 'desc' }, include: { item: { select: { name: true, unit: true } }, user: { select: { fullName: true } } } }),
+      this.prisma.stockMovement.findMany({ where, skip: (page - 1) * limit, take: limit, orderBy: { createdAt: 'desc' }, include: { item: { select: { name: true, unit: true } } } }),
       this.prisma.stockMovement.count({ where }),
     ]);
     return { data, total };
