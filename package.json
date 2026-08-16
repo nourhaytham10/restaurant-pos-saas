@@ -1,0 +1,16 @@
+{
+  "name": "restaurant-pos-saas",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": ["packages/backend"],
+  "scripts": {
+    "db:up": "docker compose up -d postgres",
+    "db:down": "docker compose down",
+    "migrate": "npm run migrate --workspace=packages/backend",
+    "seed": "npm run seed --workspace=packages/backend",
+    "dev": "npm run dev --workspace=packages/backend",
+    "build": "npm run build --workspace=packages/backend",
+    "test": "npm run test --workspace=packages/backend",
+    "test:e2e": "npm run test:e2e --workspace=packages/backend"
+  }
+}
